@@ -132,6 +132,7 @@ type tableSchema struct {
 	logTableName            string
 	skipLogs                []string
 	hasUUID                 bool
+	inMemory                bool
 	mapBindToScanPointer    mapBindToScanPointer
 	mapPointerToValue       mapPointerToValue
 }
@@ -465,6 +466,7 @@ func (tableSchema *tableSchema) init(registry *Registry, entityType reflect.Type
 			return fmt.Errorf("entity %s with uuid enabled must be unit64", entityType.String())
 		}
 	}
+	inMemory := tableSchema.getTag("memory", "true", "false") == "true"
 	uniqueIndices := make(map[string]map[int]string)
 	uniqueIndicesSimple := make(map[string][]string)
 	uniqueIndicesSimpleGlobal := make(map[string][]string)
@@ -573,6 +575,7 @@ func (tableSchema *tableSchema) init(registry *Registry, entityType reflect.Type
 	tableSchema.uniqueIndicesGlobal = uniqueIndicesSimpleGlobal
 	tableSchema.hasLog = logPoolName != ""
 	tableSchema.hasUUID = hasUUID
+	tableSchema.inMemory = inMemory
 	tableSchema.logPoolName = logPoolName
 	tableSchema.logTableName = fmt.Sprintf("_log_%s_%s", tableSchema.mysqlPoolName, tableSchema.tableName)
 	tableSchema.skipLogs = skipLogs

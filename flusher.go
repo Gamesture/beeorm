@@ -407,7 +407,9 @@ func (f *flusher) executeDeletes(lazy bool) {
 				if logEvent != nil {
 					logEvents = append(logEvents, logEvent)
 				}
-				f.fillLazyQuery(db.GetPoolConfig().GetCode(), deleteSQLPrefix+strconv.FormatUint(id, 10)+")", false, id, logEvents)
+				if !schema.inMemory {
+					f.fillLazyQuery(db.GetPoolConfig().GetCode(), deleteSQLPrefix+strconv.FormatUint(id, 10)+")", false, id, logEvents)
+				}
 			}
 			if hasLocalCache || hasRedis {
 				cacheKey := schema.getCacheKey(id)
@@ -487,7 +489,9 @@ func (f *flusher) executeInserts(flushPackage *flushPackage, lazy bool) {
 					logEvents = append(logEvents, logEvent)
 				}
 			}
-			f.fillLazyQuery(db.GetPoolConfig().GetCode(), sql, true, 0, logEvents)
+			if !schema.inMemory {
+				f.fillLazyQuery(db.GetPoolConfig().GetCode(), sql, true, 0, logEvents)
+			}
 		} else {
 			res := db.Exec(sql)
 			id := res.LastInsertId()
@@ -607,7 +611,9 @@ func (f *flusher) flushUpdate(entity Entity, bindBuilder *bindBuilder, currentID
 		if logEvent != nil {
 			logEvents = append(logEvents, logEvent)
 		}
-		f.fillLazyQuery(db.GetPoolConfig().GetCode(), sql, false, currentID, logEvents)
+		if !schema.inMemory {
+			f.fillLazyQuery(db.GetPoolConfig().GetCode(), sql, false, currentID, logEvents)
+		}
 	} else {
 		if f.updateSQLs == nil {
 			f.updateSQLs = make(map[string][]string)
