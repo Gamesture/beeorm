@@ -36,6 +36,7 @@ type Entity interface {
 	SetEntityLogMeta(key string, value interface{})
 	SetField(field string, value interface{}) error
 	Clone() Entity
+	SetMemoryOnly(memory bool)
 }
 
 type ORM struct {
@@ -51,6 +52,7 @@ type ORM struct {
 	elem                 reflect.Value
 	idElem               reflect.Value
 	logMeta              map[string]interface{}
+	memory               bool
 }
 
 func DisableCacheHashCheck() {
@@ -105,6 +107,10 @@ func (orm *ORM) IsLoaded() bool {
 
 func (orm *ORM) SetOnDuplicateKeyUpdate(bind Bind) {
 	orm.onDuplicateKeyUpdate = bind
+}
+
+func (orm *ORM) SetMemoryOnly(memory bool) {
+	orm.memory = memory
 }
 
 func (orm *ORM) SetEntityLogMeta(key string, value interface{}) {
