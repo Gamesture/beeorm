@@ -287,7 +287,7 @@ func testSchema(t *testing.T, version int) {
 	has, alters := schema.GetSchemaChanges(engine)
 	assert.True(t, has)
 	assert.Len(t, alters, 1)
-	assert.Equal(t, "CREATE TABLE `test`.`schemaToDropEntity` (\n  `ID` int(10) unsigned NOT NULL AUTO_INCREMENT,\n  PRIMARY KEY (`ID`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;", alters[0].SQL)
+	assert.Equal(t, "CREATE TABLE `test`.`schemaToDropEntity` (\n  `ID` int unsigned NOT NULL AUTO_INCREMENT,\n  PRIMARY KEY (`ID`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;", alters[0].SQL)
 
 	registry = &Registry{}
 	registry.RegisterMySQLPool(pool)

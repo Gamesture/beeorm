@@ -60,7 +60,7 @@ Zrobione (2026-06-25):
 - [x] `TestValidatedRegistry` — major version `8`, port 3312.
 
 Pozostało (większe / spoza prostego version-stringa):
-- [ ] **`TestSchema8` nie przechodzi na 8.4** — MySQL 8.4 zgłasza `COLLATE=utf8mb4_0900_ai_ci` w DDL tam, gdzie asercje (pisane pod 8.0) tego nie mają. ⚠️ Może oznaczać, że **diffowanie schematu w beeorm generuje nadmiarowe altery na 8.4** (realny problem kompat., nie tylko test). Wymaga: weryfikacji logiki `schema.go`/`table_schema.go` pod 8.4 + regeneracji oczekiwanego DDL (NIE wklejać ślepo outputu — to zabija sens testu).
+- [x] **`TestSchema8`** — naprawione. Differ OK (zweryfikowane: wszystkie asercje liczby alterów i idempotencji `Len(alters,0)` przechodzą; beeorm generuje poprawny DDL 8.x z jawnym `COLLATE utf8mb4_0900_ai_ci` i `int unsigned`). Failowała tylko **jedna przeterminowana asercja** (`schema_test.go:290`, styl 5.7: `int(10)`, brak COLLATE) — zaktualizowana pod 8.x. NIE był to bug w kodzie.
 - [x] **TestFlush\* — różnica 1h (timezone)** — naprawione: dodany `TestMain` (`main_test.go`) wymuszający `TZ=UTC` dla procesu testowego (BeeORM wymaga UTC; `go test` nie odpala `main()`).
 - [ ] `docker-compose.yml` — opcjonalnie usunąć serwis `mysql_orm` (5.7), zostawić `mysql8_orm` (lub cały compose, skoro jedziemy lokalnie).
 - [ ] `testSchema` — doczyścić martwe gałęzie `if version == 5` (po usunięciu `TestSchema5` nieosiągalne).
