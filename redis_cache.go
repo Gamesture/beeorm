@@ -9,7 +9,7 @@ import (
 
 	"github.com/shamaton/msgpack"
 
-	"github.com/go-redis/redis/v9"
+	"github.com/redis/go-redis/v9"
 )
 
 type RedisCache struct {
@@ -828,7 +828,10 @@ func (r *RedisCache) XReadGroup(ctx context.Context, a *redis.XReadGroupArgs) (s
 		message += fmt.Sprintf(" COUNT %d BLOCK %s NOACK %v", a.Count, a.Block.String(), a.NoAck)
 		r.fillLogFields("XREADGROUP", message, start, false, err)
 	}
-	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+	// ctx cancellation/deadline aborts the blocking read. go-redis with
+	// ContextTimeoutEnabled may surface this as a net i/o timeout rather than
+	// context.DeadlineExceeded, so fall back to checking ctx.Err().
+	if err != nil && (errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) || ctx.Err() != nil) {
 		err = nil
 	}
 	checkError(err)

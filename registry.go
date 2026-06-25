@@ -13,7 +13,7 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/go-redis/redis/v9"
+	"github.com/redis/go-redis/v9"
 	_ "github.com/go-sql-driver/mysql" // force this mysql driver
 )
 
@@ -227,6 +227,9 @@ func (r *Registry) RegisterRedisWithCredentials(address, namespace, user, passwo
 		ConnMaxIdleTime: time.Minute * 2,
 		Username:        user,
 		Password:        password,
+		// honor context deadlines for blocking commands (e.g. XReadGroup in the
+		// consumer); go-redis v9 defaults this to false. See CODE_REVIEW_BACKLOG.md.
+		ContextTimeoutEnabled: true,
 	}
 	if strings.HasSuffix(address, ".sock") {
 		options.Network = "unix"
@@ -241,12 +244,13 @@ func (r *Registry) RegisterRedisSentinel(masterName, namespace string, db int, s
 
 func (r *Registry) RegisterRedisSentinelWithCredentials(masterName, namespace, user, password string, db int, sentinels []string, code ...string) {
 	options := &redis.FailoverOptions{
-		MasterName:      masterName,
-		SentinelAddrs:   sentinels,
-		DB:              db,
-		ConnMaxIdleTime: time.Minute * 2,
-		Username:        user,
-		Password:        password,
+		MasterName:            masterName,
+		SentinelAddrs:         sentinels,
+		DB:                    db,
+		ConnMaxIdleTime:       time.Minute * 2,
+		Username:              user,
+		Password:              password,
+		ContextTimeoutEnabled: true,
 	}
 	client := redis.NewFailoverClient(options)
 	r.registerRedis(client, code, fmt.Sprintf("%v", sentinels), namespace, db)
@@ -255,6 +259,7 @@ func (r *Registry) RegisterRedisSentinelWithCredentials(masterName, namespace, u
 func (r *Registry) RegisterRedisSentinelWithOptions(namespace string, opts redis.FailoverOptions, db int, sentinels []string, code ...string) {
 	opts.DB = db
 	opts.SentinelAddrs = sentinels
+	opts.ContextTimeoutEnabled = true
 	if opts.ConnMaxIdleTime == 0 {
 		opts.ConnMaxIdleTime = time.Minute * 2
 	}

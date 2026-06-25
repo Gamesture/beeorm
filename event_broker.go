@@ -9,7 +9,7 @@ import (
 
 	"github.com/shamaton/msgpack"
 
-	"github.com/go-redis/redis/v9"
+	"github.com/redis/go-redis/v9"
 )
 
 type Event interface {

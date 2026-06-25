@@ -168,7 +168,7 @@ func (r *BackgroundConsumer) Digest(ctx context.Context) bool {
 							if rec := recover(); rec != nil {
 								assErr, is := rec.(error)
 								if !is {
-									assErr = fmt.Errorf(fmt.Sprintf("%v", rec))
+									assErr = fmt.Errorf("%v", rec)
 								}
 								r.lazyErrorLock.Lock()
 								defer r.lazyErrorLock.Unlock()
@@ -199,7 +199,7 @@ func (r *BackgroundConsumer) Digest(ctx context.Context) bool {
 								if rec := recover(); rec != nil {
 									assErr, is := rec.(error)
 									if !is {
-										assErr = fmt.Errorf(fmt.Sprintf("%v", rec))
+										assErr = fmt.Errorf("%v", rec)
 									}
 									r.lazyErrorLock.Lock()
 									defer r.lazyErrorLock.Unlock()

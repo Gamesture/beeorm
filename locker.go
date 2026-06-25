@@ -24,6 +24,18 @@ func (l *standardLockerClient) Obtain(ctx context.Context, key string, options .
 
 }
 
+// redsyncLockTaken reports whether err means the lock is held elsewhere.
+// redsync v4 returns *ErrTaken / *ErrNodeTaken (often wrapped in a multierror),
+// so a plain type assertion misses it — use errors.As.
+func redsyncLockTaken(err error) bool {
+	if err == nil {
+		return false
+	}
+	var taken *redsync.ErrTaken
+	var nodeTaken *redsync.ErrNodeTaken
+	return errors.As(err, &taken) || errors.As(err, &nodeTaken)
+}
+
 type Locker struct {
 	locker lockerClient
 	r      *RedisCache
@@ -62,15 +74,7 @@ func (l *Locker) Obtain(ctx context.Context, key string, ttl time.Duration, wait
 		mutex, err = l.locker.Obtain(ctx, key, redsync.WithExpiry(ttl), redsync.WithTries(tries), redsync.WithRetryDelay(delay))
 	}
 	if err != nil {
-		if err == redsync.ErrFailed {
-			if l.r.engine.hasRedisLogger {
-				message := fmt.Sprintf("LOCK OBTAIN %s TTL %s WAIT %s", key, ttl.String(), waitTimeout.String())
-				l.fillLogFields("LOCK OBTAIN", message, start, true, nil)
-			}
-			return nil, false
-		}
-		_, is := err.(redsync.ErrTaken)
-		if is {
+		if errors.Is(err, redsync.ErrFailed) || redsyncLockTaken(err) {
 			if l.r.engine.hasRedisLogger {
 				message := fmt.Sprintf("LOCK OBTAIN %s TTL %s WAIT %s", key, ttl.String(), waitTimeout.String())
 				l.fillLogFields("LOCK OBTAIN", message, start, true, nil)
@@ -103,8 +107,7 @@ func (l *Lock) Release() {
 	l.has = false
 	start := getNow(l.engine.hasRedisLogger)
 	ok, err := l.lock.UnlockContext(context.Background())
-	_, is := err.(redsync.ErrTaken)
-	if is {
+	if redsyncLockTaken(err) {
 		err = nil
 	}
 	if l.engine.hasRedisLogger {
@@ -129,17 +132,10 @@ func (l *Lock) Refresh(ctx context.Context) bool {
 	start := getNow(l.engine.hasRedisLogger)
 	ok, err := l.lock.ExtendContext(ctx)
 	if err != nil {
-		if err == redsync.ErrExtendFailed {
+		if errors.Is(err, redsync.ErrExtendFailed) || redsyncLockTaken(err) {
 			ok = false
 			err = nil
 			l.has = false
-		} else {
-			_, is := err.(redsync.ErrTaken)
-			if is {
-				ok = false
-				err = nil
-				l.has = false
-			}
 		}
 	}
 	if l.engine.hasRedisLogger {

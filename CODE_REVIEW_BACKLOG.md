@@ -67,7 +67,7 @@ Pozostało (większe / spoza prostego version-stringa):
 
 ## 🟢 LOW — dług techniczny / zależności
 
-- [ ] `go-redis/v9 v9.0.0-beta.2` (beta z 2022) → stable v9 (breaking changes w `XPending`, którego używamy).
+- [x] **`go-redis/v9 v9.0.0-beta.2` → `redis/go-redis/v9 v9.21.0`** (2026-06-25). Obejmowało: (1) zmiana ścieżki modułu `go-redis/redis/v9` → `redis/go-redis/v9` w 7 plikach; (2) bump `redsync v4.7.1 → v4.16.0`; (3) `ContextTimeoutEnabled: true` w opcjach klienta — bez tego ctx nie przerywał blokującego `XReadGroup` (kolejka/consumer); (4) `XReadGroup` traktuje błąd jako anulowanie gdy `ctx.Err() != nil` (go-redis surfuje net i/o timeout zamiast `DeadlineExceeded`); (5) `redsyncLockTaken()` przez `errors.As` (redsync v4 zwraca `*ErrTaken`/`*ErrNodeTaken` w multierror, stary type-assertion nie łapał); (6) fix vet `fmt.Errorf(fmt.Sprintf(...))`. Pełny suite zielony, pokrycie 96.0%. `redis/v8` zniknął z drzewa.
 - [ ] `json-iterator` niemaintainowany + `ConfigFastest` wyłącza HTML-escaping; rozważyć stdlib.
 - [ ] `pkg/errors` w maintenance mode → stdlib `fmt.Errorf("%w")`.
 - [ ] `go 1.19` → bump do 1.21+ (odblokuje `unsafe.StringData`, `slices`, `errors.Join`).
