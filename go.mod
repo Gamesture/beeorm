@@ -1,4 +1,4 @@
-module github.com/latolukasz/beeorm
+module github.com/Gamesture/beeorm
 
 go 1.19
 
