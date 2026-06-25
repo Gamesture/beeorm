@@ -183,7 +183,7 @@ func TestLazyFlush(t *testing.T) {
 	e1.Name = "Ivona"
 	e1.Age = 20
 	engine.FlushLazy(e1)
-	assert.PanicsWithError(t, "Error 1062 (23000): Duplicate entry 'Ivona' for key 'name'", func() {
+	assert.PanicsWithError(t, "Error 1062 (23000): Duplicate entry 'Ivona' for key 'lazyreceiverentity.name'", func() {
 		receiver.Digest(context.Background())
 	})
 	valid := false
@@ -192,10 +192,10 @@ func TestLazyFlush(t *testing.T) {
 		assert.NotNil(t, db)
 		assert.Equal(t, "default", db.GetPoolConfig().GetCode())
 		assert.Contains(t, sql, "INSERT INTO `lazyReceiverEntity`")
-		assert.Error(t, queryError, "Error 1062 (23000): Duplicate entry 'Ivona' for key 'name'")
+		assert.Error(t, queryError, "Error 1062 (23000): Duplicate entry 'Ivona' for key 'lazyreceiverentity.name'")
 		return queryError
 	})
-	assert.PanicsWithError(t, "Error 1062 (23000): Duplicate entry 'Ivona' for key 'name'", func() {
+	assert.PanicsWithError(t, "Error 1062 (23000): Duplicate entry 'Ivona' for key 'lazyreceiverentity.name'", func() {
 		receiver.Digest(context.Background())
 	})
 	assert.True(t, valid)
@@ -206,7 +206,7 @@ func TestLazyFlush(t *testing.T) {
 		assert.NotNil(t, db)
 		assert.Equal(t, "default", db.GetPoolConfig().GetCode())
 		assert.Contains(t, sql, "INSERT INTO `lazyReceiverEntity`")
-		assert.Error(t, queryError, "Error 1062 (23000): Duplicate entry 'Ivona' for key 'name'")
+		assert.Error(t, queryError, "Error 1062 (23000): Duplicate entry 'Ivona' for key 'lazyreceiverentity.name'")
 		return nil
 	})
 	receiver.Digest(context.Background())

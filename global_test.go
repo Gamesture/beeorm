@@ -23,13 +23,9 @@ func (h *testLogHandler) clear() {
 }
 
 func prepareTables(t *testing.T, registry *Registry, mySQLVersion, redisVersion int, redisNamespace string, entities ...Entity) (engine *engineImplementation) {
-	if mySQLVersion == 5 {
-		registry.RegisterMySQLPool("root:root@tcp(localhost:3311)/test?limit_connections=10")
-		registry.RegisterMySQLPool("root:root@tcp(localhost:3311)/test_log", "log")
-	} else {
-		registry.RegisterMySQLPool("root:root@tcp(localhost:3312)/test")
-		registry.RegisterMySQLPool("root:root@tcp(localhost:3312)/test_log", "log")
-	}
+	// MySQL 8.4+ only — old 5.7 path dropped (see CODE_REVIEW_BACKLOG.md)
+	registry.RegisterMySQLPool("root:root@tcp(localhost:3312)/test?limit_connections=10")
+	registry.RegisterMySQLPool("root:root@tcp(localhost:3312)/test_log", "log")
 	if redisVersion == 6 {
 		registry.RegisterRedis("localhost:6382", redisNamespace, 15)
 		registry.RegisterRedis("localhost:6382", redisNamespace, 14, "default_queue")

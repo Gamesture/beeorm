@@ -612,7 +612,7 @@ func testFlush(t *testing.T, local bool, redis bool) {
 	assert.Nil(t, entity.ReferenceMany)
 
 	entity2 := &flushEntity{Name: "Tom", Age: 12, EnumNotNull: "a"}
-	assert.PanicsWithError(t, "Duplicate entry 'Tom' for key 'name'", func() {
+	assert.PanicsWithError(t, "Duplicate entry 'Tom' for key 'flushentity.name'", func() {
 		engine.Flush(entity2)
 	})
 
@@ -793,7 +793,7 @@ func testFlush(t *testing.T, local bool, redis bool) {
 	entity7 = &flushEntity{Name: "test_check", EnumNotNull: "a"}
 	flusher.Track(entity7)
 	err = flusher.FlushWithCheck()
-	assert.EqualError(t, err, "Duplicate entry 'test_check' for key 'name'")
+	assert.EqualError(t, err, "Duplicate entry 'test_check' for key 'flushentity.name'")
 	entity7 = &flushEntity{Name: "test_check_2", EnumNotNull: "a", ReferenceOne: &flushEntityReference{ID: 100}}
 	err = engine.FlushWithCheck(entity7)
 	assert.EqualError(t, err, "foreign key error in key `test:flushEntity:ReferenceOne`")
@@ -810,7 +810,7 @@ func testFlush(t *testing.T, local bool, redis bool) {
 	entity8 := &flushEntity{Name: "test_check", EnumNotNull: "a"}
 	flusher.Track(entity8)
 	err = flusher.FlushWithCheck()
-	assert.EqualError(t, err, "Duplicate entry 'test_check' for key 'name'")
+	assert.EqualError(t, err, "Duplicate entry 'test_check' for key 'flushentity.name'")
 
 	assert.PanicsWithError(t, "track limit 10000 exceeded", func() {
 		for i := 1; i <= 10001; i++ {

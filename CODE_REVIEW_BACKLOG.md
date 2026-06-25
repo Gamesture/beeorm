@@ -51,13 +51,19 @@ Format: każda pozycja to checkbox — odhaczamy w miarę walki. ✅ przy ID = b
 
 ## 🧪 Testy — dostosowanie do MySQL 8.4+ (decyzja: 5.7 olewamy)
 
-> Cel projektu: **MySQL 8.4+**. Stary 5.7 nie jest wspierany. Poniższe faile to dryf wersji do przepisania pod 8.x, nie bugi.
+> Cel projektu: **MySQL 8.4+**. Stary 5.7 nie jest wspierany.
 
-- [ ] Usunąć/przepisać ścieżkę „version 5" (port 3311, MySQL 5.7) w `global_test.go:26-28` — zostawić tylko 8.x.
-- [ ] `TestSchema5` (`schema_test.go:108`) — przepisać pod schemat MySQL 8.x lub usunąć (duplikuje `TestSchema8`).
-- [ ] `flusher_test.go:796,813` — oczekiwany komunikat duplicate key na format 8.x: `'flushentity.name'` zamiast `'name'`.
-- [ ] `TestValidatedRegistry` (`validated_registry_test.go:63`) — oczekiwać major version `8`, nie `5`.
-- [ ] `docker-compose.yml` — opcjonalnie usunąć serwis `mysql_orm` (5.7), zostawić `mysql8_orm`. (Jeśli zostajemy przy lokalnych instancjach bez dockera — compose można w ogóle wywalić.)
+Zrobione (2026-06-25):
+- [x] Usunięta ścieżka „version 5" (port 3311) w `global_test.go` — zunifikowane na 8.x (port 3312, z `limit_connections=10`).
+- [x] Usunięty `TestSchema5` (zostaje `TestSchema8`).
+- [x] Komunikat duplicate key na format 8.x (`tabela.indeks`): `flusher_test.go` (3 miejsca: 615/796/813), `lazy_flush_test.go` (4 miejsca) → `flushentity.name` / `lazyreceiverentity.name`.
+- [x] `TestValidatedRegistry` — major version `8`, port 3312.
+
+Pozostało (większe / spoza prostego version-stringa):
+- [ ] **`TestSchema8` nie przechodzi na 8.4** — MySQL 8.4 zgłasza `COLLATE=utf8mb4_0900_ai_ci` w DDL tam, gdzie asercje (pisane pod 8.0) tego nie mają. ⚠️ Może oznaczać, że **diffowanie schematu w beeorm generuje nadmiarowe altery na 8.4** (realny problem kompat., nie tylko test). Wymaga: weryfikacji logiki `schema.go`/`table_schema.go` pod 8.4 + regeneracji oczekiwanego DDL (NIE wklejać ślepo outputu — to zabija sens testu).
+- [ ] **`TestFlushLocal`/`TestFlushNoCache`/`TestFlushLocalRedis` — różnica 1h (timezone)**, nie wersja. Lokalny MySQL ma sesyjną strefę ≠ UTC. Rozwiązanie: ustawić serwerowi `default-time-zone='+00:00'` albo dodać `time_zone`/`loc=UTC` do DSN testów (docker pinował UTC). Środowiskowe.
+- [ ] `docker-compose.yml` — opcjonalnie usunąć serwis `mysql_orm` (5.7), zostawić `mysql8_orm` (lub cały compose, skoro jedziemy lokalnie).
+- [ ] `testSchema` — doczyścić martwe gałęzie `if version == 5` (po usunięciu `TestSchema5` nieosiągalne).
 
 ## 🟢 LOW — dług techniczny / zależności
 

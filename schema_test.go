@@ -104,10 +104,6 @@ type schemaEntity struct {
 	IndexAll       *CachedQuery `query:""`
 }
 
-func TestSchema5(t *testing.T) {
-	testSchema(t, 5)
-}
-
 func TestSchema8(t *testing.T) {
 	testSchema(t, 8)
 }

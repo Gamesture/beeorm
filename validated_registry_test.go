@@ -25,7 +25,7 @@ type validatedRegistryNotRegisteredEntity struct {
 
 func TestValidatedRegistry(t *testing.T) {
 	registry := &Registry{}
-	registry.RegisterMySQLPool("root:root@tcp(localhost:3311)/test")
+	registry.RegisterMySQLPool("root:root@tcp(localhost:3312)/test")
 	registry.RegisterLocalCache(100)
 	registry.RegisterLocalCache(50, "another")
 	registry.RegisterEnum("enum_map", []string{"a", "b"}, "b")
@@ -60,8 +60,8 @@ func TestValidatedRegistry(t *testing.T) {
 	assert.NotNil(t, mysqlPools["default"])
 	assert.Equal(t, "default", mysqlPools["default"].GetCode())
 	assert.Equal(t, "test", mysqlPools["default"].GetDatabase())
-	assert.Equal(t, 5, mysqlPools["default"].GetVersion())
-	assert.Equal(t, "root:root@tcp(localhost:3311)/test?multiStatements=true", mysqlPools["default"].GetDataSourceURI())
+	assert.Equal(t, 8, mysqlPools["default"].GetVersion())
+	assert.Equal(t, "root:root@tcp(localhost:3312)/test?multiStatements=true", mysqlPools["default"].GetDataSourceURI())
 
 	localCachePools := validated.GetLocalCachePools()
 	assert.Len(t, localCachePools, 2)
