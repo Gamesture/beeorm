@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/shamaton/msgpack"
+	"github.com/shamaton/msgpack/v2"
 
 	"github.com/redis/go-redis/v9"
 )

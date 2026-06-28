@@ -11,7 +11,7 @@ import (
 
 	"github.com/go-sql-driver/mysql"
 
-	"github.com/shamaton/msgpack"
+	"github.com/shamaton/msgpack/v2"
 
 	jsoniter "github.com/json-iterator/go"
 )

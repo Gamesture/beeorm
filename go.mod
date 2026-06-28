@@ -1,6 +1,6 @@
 module github.com/Gamesture/beeorm
 
-go 1.24.9
+go 1.26
 
 require (
 	github.com/go-redsync/redsync/v4 v4.16.0
@@ -11,7 +11,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/redis/go-redis/v9 v9.21.0
 	github.com/segmentio/fasthash v1.0.3
-	github.com/shamaton/msgpack v1.2.1
+	github.com/shamaton/msgpack/v2 v2.4.1
 	github.com/stretchr/testify v1.8.1
 	gopkg.in/yaml.v2 v2.4.0
 )
