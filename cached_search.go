@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/segmentio/fasthash/fnv1a"
 )
 
 const idsOnCachePage = 1000
@@ -281,6 +280,25 @@ func cachedSearchOne(serializer *serializer, engine *engineImplementation, entit
 	return false
 }
 
+// getCacheKeySearch builds the cache key of a cached query (CachedSearch / CachedSearchOne and their
+// invalidation in flusher). Parameters are stored verbatim, each one prefixed with its byte length:
+//
+//	<cachePrefix>_<indexName>:5:49914:5:10235
+//
+// The length prefix makes the key unambiguous for any parameter content (separators inside strings
+// included) without escaping. Previously the parameters were reduced to a 32-bit FNV-1a hash, which
+// produced silent collisions between unrelated rows, e.g. fnv1a32("[49914 10235]") == fnv1a32("[5674670 9592]").
 func getCacheKeySearch(tableSchema *tableSchema, indexName string, parameters ...interface{}) string {
-	return tableSchema.cachePrefix + "_" + indexName + strconv.Itoa(int(fnv1a.HashString32(fmt.Sprintf("%v", parameters))))
+	var b strings.Builder
+	b.WriteString(tableSchema.cachePrefix)
+	b.WriteByte('_')
+	b.WriteString(indexName)
+	for _, parameter := range parameters {
+		value := fmt.Sprint(parameter)
+		b.WriteByte(':')
+		b.WriteString(strconv.Itoa(len(value)))
+		b.WriteByte(':')
+		b.WriteString(value)
+	}
+	return b.String()
 }
