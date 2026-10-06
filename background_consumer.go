@@ -53,6 +53,17 @@ func NewBackgroundConsumer(engine Engine) *BackgroundConsumer {
 
 type LazyFlushQueryErrorResolver func(engine Engine, db *DB, sql string, queryError *mysql.MySQLError) error
 
+// SetLazyFlushModulo sets number of parallel groups (per MySQL pool) used to
+// execute lazy UPDATE/DELETE queries. Query goes to group ID % modulo, groups
+// with more than one query are executed in one transaction. Default is 11,
+// 1 means all queries for given pool are executed in one transaction in stream order.
+func (r *BackgroundConsumer) SetLazyFlushModulo(modulo uint64) {
+	if modulo == 0 {
+		panic(fmt.Errorf("lazy flush modulo must be greater than 0"))
+	}
+	r.lazyFlushModulo = modulo
+}
+
 func (r *BackgroundConsumer) RegisterLazyFlushQueryErrorResolver(resolver LazyFlushQueryErrorResolver) {
 	r.lazyFlushQueryErrorResolvers = append(r.lazyFlushQueryErrorResolvers, resolver)
 }

@@ -2,6 +2,7 @@ package beeorm
 
 import (
 	"context"
+	"sync"
 	"testing"
 	"time"
 
@@ -212,4 +213,82 @@ func TestLazyFlush(t *testing.T) {
 	receiver.Digest(context.Background())
 	assert.True(t, valid)
 	assert.True(t, valid2)
+}
+
+type lazyFlushModuloLogHandler struct {
+	sync.Mutex
+	execs []string
+}
+
+func (h *lazyFlushModuloLogHandler) Handle(log map[string]interface{}) {
+	h.Lock()
+	defer h.Unlock()
+	if log["operation"] == "BEGIN" || log["operation"] == "EXEC" {
+		h.execs = append(h.execs, log["operation"].(string))
+	}
+}
+
+func (h *lazyFlushModuloLogHandler) count(operation string) int {
+	h.Lock()
+	defer h.Unlock()
+	total := 0
+	for _, op := range h.execs {
+		if op == operation {
+			total++
+		}
+	}
+	return total
+}
+
+func TestLazyFlushModulo(t *testing.T) {
+	assert.PanicsWithError(t, "lazy flush modulo must be greater than 0", func() {
+		(&BackgroundConsumer{}).SetLazyFlushModulo(0)
+	})
+
+	for _, test := range []struct {
+		modulo         uint64
+		expectedBegins int
+		expectedExecs  int
+	}{
+		{modulo: 11, expectedBegins: 1, expectedExecs: 3}, // ID 1 (2 queries) -> transaction, IDs 2,3 -> autocommit
+		{modulo: 1, expectedBegins: 1, expectedExecs: 1},  // one group, one transaction
+		{modulo: 2, expectedBegins: 1, expectedExecs: 2},  // IDs 1,3 -> one transaction, ID 2 -> autocommit
+	} {
+		var entity *lazyReceiverEntity
+		var ref *lazyReceiverReference
+		registry := &Registry{}
+		registry.RegisterEnum("beeorm.TestEnum", []string{"a", "b", "c"})
+		engine := prepareTables(t, registry, 6, "", entity, ref)
+		engine.GetRedis().FlushDB()
+
+		receiver := NewBackgroundConsumer(engine)
+		receiver.DisableBlockMode()
+		receiver.blockTime = time.Millisecond
+		receiver.SetLazyFlushModulo(test.modulo)
+
+		entities := []*lazyReceiverEntity{{Name: "A"}, {Name: "B"}, {Name: "C"}}
+		engine.Flush(entities[0], entities[1], entities[2])
+
+		entities[0].Age = 10
+		entities[1].Age = 20
+		entities[2].Age = 30
+		engine.FlushLazy(entities[0], entities[1], entities[2])
+		entities[0].Age = 11
+		engine.FlushLazy(entities[0])
+
+		logger := &lazyFlushModuloLogHandler{}
+		engine.RegisterQueryLogger(logger, true, false, false)
+		receiver.Digest(context.Background())
+
+		assert.Equal(t, test.expectedBegins, logger.count("BEGIN"), "modulo %d", test.modulo)
+		assert.Equal(t, test.expectedExecs, logger.count("EXEC"), "modulo %d", test.modulo)
+
+		engine.GetLocalCache().Clear()
+		engine.GetRedis().FlushDB()
+		for i, expected := range []uint64{11, 20, 30} {
+			e := &lazyReceiverEntity{}
+			assert.True(t, engine.LoadByID(uint64(i+1), e))
+			assert.Equal(t, expected, e.Age, "modulo %d, ID %d", test.modulo, i+1)
+		}
+	}
 }
