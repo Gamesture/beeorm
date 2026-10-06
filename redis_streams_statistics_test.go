@@ -11,7 +11,7 @@ import (
 func TestRedisStreamsStatus(t *testing.T) {
 	registry := &Registry{}
 	registry.RegisterRedis("localhost:6382", "", 11)
-	registry.RegisterMySQLPool("root:root@tcp(localhost:3311)/test")
+	registry.RegisterMySQLPool("root:root@tcp(localhost:3312)/test")
 	registry.RegisterRedisStream("test-stream", "default", []string{"test-group"})
 	validatedRegistry, err := registry.Validate()
 	assert.NoError(t, err)

@@ -44,15 +44,8 @@ jobs:
         image: redis:7.0.7
         ports:
           - 6381:6379
-      mysql:
-        image: mysql:5.7
-        env:
-          MYSQL_ROOT_PASSWORD: root
-        ports:
-          - 3311:3306
-        options: --health-cmd="mysqladmin ping" --health-interval=5s --health-timeout=5s --health-retries=3
       mysql8:
-        image: mysql:8
+        image: mysql:8.4
         env:
           MYSQL_ROOT_PASSWORD: root
         ports:
@@ -79,10 +72,6 @@ jobs:
       - name: Create database
         run: |
           sudo apt-get update
-          mysql -uroot -h127.0.0.1 --port=3311 -proot -e 'CREATE DATABASE IF NOT EXISTS test;'
-          mysql -uroot -h127.0.0.1 --port=3311 -proot -e 'CREATE DATABASE IF NOT EXISTS test_schema;'
-          mysql -uroot -h127.0.0.1 --port=3311 -proot -e 'CREATE DATABASE IF NOT EXISTS test_log;'
-          mysql -uroot -h127.0.0.1 --port=3311 -proot -e 'set global max_connections = 300;'
           mysql -uroot -h127.0.0.1 --port=3312 -proot -e 'CREATE DATABASE IF NOT EXISTS test;'
           mysql -uroot -h127.0.0.1 --port=3312 -proot -e 'CREATE DATABASE IF NOT EXISTS test_schema;'
           mysql -uroot -h127.0.0.1 --port=3312 -proot -e 'CREATE DATABASE IF NOT EXISTS test_log;'

@@ -75,18 +75,10 @@ func getAlters(engine *engineImplementation) (alters []Alter) {
 				logPool := engine.GetMysql(tableSchema.logPoolName)
 				var tableDef string
 				hasLogTable := logPool.QueryRow(NewWhere(fmt.Sprintf("SHOW TABLES LIKE '%s'", tableSchema.logTableName)), &tableDef)
-				var logTableSchema string
-				if logPool.GetPoolConfig().GetVersion() == 5 {
-					logTableSchema = fmt.Sprintf("CREATE TABLE `%s`.`%s` (\n  `id` bigint(11) unsigned NOT NULL AUTO_INCREMENT,\n  "+
-						"`entity_id` int(10) unsigned NOT NULL,\n  `added_at` datetime NOT NULL,\n  `meta` json DEFAULT NULL,\n  `before` json DEFAULT NULL,\n  `changes` json DEFAULT NULL,\n  "+
-						"PRIMARY KEY (`id`),\n  KEY `entity_id` (`entity_id`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 ROW_FORMAT=COMPRESSED KEY_BLOCK_SIZE=8;",
-						logPool.GetPoolConfig().GetDatabase(), tableSchema.logTableName)
-				} else {
-					logTableSchema = fmt.Sprintf("CREATE TABLE `%s`.`%s` (\n  `id` bigint unsigned NOT NULL AUTO_INCREMENT,\n  "+
-						"`entity_id` int unsigned NOT NULL,\n  `added_at` datetime NOT NULL,\n  `meta` json DEFAULT NULL,\n  `before` json DEFAULT NULL,\n  `changes` json DEFAULT NULL,\n  "+
-						"PRIMARY KEY (`id`),\n  KEY `entity_id` (`entity_id`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_%s ROW_FORMAT=COMPRESSED KEY_BLOCK_SIZE=8;",
-						logPool.GetPoolConfig().GetDatabase(), tableSchema.logTableName, engine.registry.registry.defaultCollate)
-				}
+				logTableSchema := fmt.Sprintf("CREATE TABLE `%s`.`%s` (\n  `id` bigint unsigned NOT NULL AUTO_INCREMENT,\n  "+
+					"`entity_id` int unsigned NOT NULL,\n  `added_at` datetime NOT NULL,\n  `meta` json DEFAULT NULL,\n  `before` json DEFAULT NULL,\n  `changes` json DEFAULT NULL,\n  "+
+					"PRIMARY KEY (`id`),\n  KEY `entity_id` (`entity_id`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_%s ROW_FORMAT=COMPRESSED KEY_BLOCK_SIZE=8;",
+					logPool.GetPoolConfig().GetDatabase(), tableSchema.logTableName, engine.registry.registry.defaultCollate)
 
 				if !hasLogTable {
 					alters = append(alters, Alter{SQL: logTableSchema, Safe: true, Pool: tableSchema.logPoolName, engine: engine})
@@ -212,11 +204,8 @@ func getSchemaChanges(engine *engineImplementation, tableSchema *tableSchema) (h
 	}
 
 	createTableSQL += "  PRIMARY KEY (`ID`)\n"
-	collate := ""
-	if pool.GetPoolConfig().GetVersion() == 8 {
-		collate += " COLLATE=" + engine.registry.registry.defaultEncoding + "_" + engine.registry.registry.defaultCollate
-	}
-	createTableSQL += fmt.Sprintf(") ENGINE=InnoDB DEFAULT CHARSET=%s%s;", engine.registry.registry.defaultEncoding, collate)
+	createTableSQL += fmt.Sprintf(") ENGINE=InnoDB DEFAULT CHARSET=%s COLLATE=%s_%s;", engine.registry.registry.defaultEncoding,
+		engine.registry.registry.defaultEncoding, engine.registry.registry.defaultCollate)
 
 	var skip string
 	hasTable := pool.QueryRow(NewWhere(fmt.Sprintf("SHOW TABLES LIKE '%s'", tableSchema.tableName)), &skip)
@@ -265,11 +254,7 @@ func getSchemaChanges(engine *engineImplementation, tableSchema *tableSchema) (h
 	defer def()
 	for results.Next() {
 		var row indexDB
-		if pool.GetPoolConfig().GetVersion() == 5 {
-			results.Scan(&row.Skip, &row.NonUnique, &row.KeyName, &row.Seq, &row.Column, &row.Skip, &row.Skip, &row.Skip, &row.Skip, &row.Skip, &row.Skip, &row.Skip, &row.Skip)
-		} else {
-			results.Scan(&row.Skip, &row.NonUnique, &row.KeyName, &row.Seq, &row.Column, &row.Skip, &row.Skip, &row.Skip, &row.Skip, &row.Skip, &row.Skip, &row.Skip, &row.Skip, &row.Skip, &row.Skip)
-		}
+		results.Scan(&row.Skip, &row.NonUnique, &row.KeyName, &row.Seq, &row.Column, &row.Skip, &row.Skip, &row.Skip, &row.Skip, &row.Skip, &row.Skip, &row.Skip, &row.Skip, &row.Skip, &row.Skip)
 		rows = append(rows, row)
 	}
 	def()
@@ -486,11 +471,8 @@ OUTER:
 		}
 		alters = append(alters, Alter{SQL: alterSQL, Safe: safe, Pool: tableSchema.mysqlPoolName, engine: engine})
 	} else if hasAlterEngineCharset {
-		collate := ""
-		if pool.GetPoolConfig().GetVersion() == 8 {
-			collate += " COLLATE=" + engine.registry.registry.defaultEncoding + "_" + engine.registry.registry.defaultCollate
-		}
-		alterSQL += fmt.Sprintf(" ENGINE=InnoDB DEFAULT CHARSET=%s%s;", engine.registry.registry.defaultEncoding, collate)
+		alterSQL += fmt.Sprintf(" ENGINE=InnoDB DEFAULT CHARSET=%s COLLATE=%s_%s;", engine.registry.registry.defaultEncoding,
+			engine.registry.registry.defaultEncoding, engine.registry.registry.defaultCollate)
 		alters = append(alters, Alter{SQL: alterSQL, Safe: true, Pool: tableSchema.mysqlPoolName, engine: engine})
 	}
 	if hasAlterRemoveForeignKey {
@@ -584,7 +566,6 @@ func checkColumn(engine *engineImplementation, schema *tableSchema, field *refle
 	columnName := prefix + field.Name
 
 	attributes := schema.tags[columnName]
-	version := schema.GetMysql(engine).GetPoolConfig().GetVersion()
 
 	_, has := attributes["ignore"]
 	if has {
@@ -663,7 +644,7 @@ func checkColumn(engine *engineImplementation, schema *tableSchema, field *refle
 		"int32",
 		"int64",
 		"int":
-		definition, addNotNullIfNotSet, defaultValue = handleInt(version, typeAsString, attributes, false)
+		definition, addNotNullIfNotSet, defaultValue = handleInt(typeAsString, attributes, false)
 	case "*uint",
 		"*uint8",
 		"*uint32",
@@ -673,23 +654,17 @@ func checkColumn(engine *engineImplementation, schema *tableSchema, field *refle
 		"*int32",
 		"*int64",
 		"*int":
-		definition, addNotNullIfNotSet, defaultValue = handleInt(version, typeAsString, attributes, true)
+		definition, addNotNullIfNotSet, defaultValue = handleInt(typeAsString, attributes, true)
 	case "uint16":
 		if attributes["year"] == "true" {
-			if version == 5 {
-				return [][2]string{{columnName, fmt.Sprintf("`%s` year(4) NOT NULL DEFAULT '0000'", columnName)}}, nil
-			}
 			return [][2]string{{columnName, fmt.Sprintf("`%s` year NOT NULL DEFAULT '0000'", columnName)}}, nil
 		}
-		definition, addNotNullIfNotSet, defaultValue = handleInt(version, typeAsString, attributes, false)
+		definition, addNotNullIfNotSet, defaultValue = handleInt(typeAsString, attributes, false)
 	case "*uint16":
 		if attributes["year"] == "true" {
-			if version == 5 {
-				return [][2]string{{columnName, fmt.Sprintf("`%s` year(4) DEFAULT NULL", columnName)}}, nil
-			}
 			return [][2]string{{columnName, fmt.Sprintf("`%s` year DEFAULT NULL", columnName)}}, nil
 		}
-		definition, addNotNullIfNotSet, defaultValue = handleInt(version, typeAsString, attributes, true)
+		definition, addNotNullIfNotSet, defaultValue = handleInt(typeAsString, attributes, true)
 	case "bool":
 		if columnName == "FakeDelete" {
 			return nil, nil
@@ -698,7 +673,7 @@ func checkColumn(engine *engineImplementation, schema *tableSchema, field *refle
 	case "*bool":
 		definition, addNotNullIfNotSet, defaultValue = "tinyint(1)", false, "nil"
 	case "string", "[]string":
-		definition, addNotNullIfNotSet, addDefaultNullIfNullable, defaultValue, err = handleString(version, engine.registry, attributes, !isRequired)
+		definition, addNotNullIfNotSet, addDefaultNullIfNullable, defaultValue, err = handleString(engine.registry, attributes, !isRequired)
 		if err != nil {
 			return nil, err
 		}
@@ -731,7 +706,7 @@ func checkColumn(engine *engineImplementation, schema *tableSchema, field *refle
 		} else if kind == "ptr" {
 			subSchema := getTableSchema(engine.registry, field.Type.Elem())
 			if subSchema != nil {
-				definition = handleReferenceOne(version, subSchema, attributes)
+				definition = handleReferenceOne(subSchema, attributes)
 				addNotNullIfNotSet = false
 				addDefaultNullIfNullable = true
 			} else {
@@ -754,12 +729,12 @@ func checkColumn(engine *engineImplementation, schema *tableSchema, field *refle
 	return [][2]string{{columnName, fmt.Sprintf("`%s` %s", columnName, definition)}}, nil
 }
 
-func handleInt(version int, typeAsString string, attributes map[string]string, nullable bool) (string, bool, string) {
+func handleInt(typeAsString string, attributes map[string]string, nullable bool) (string, bool, string) {
 	if nullable {
 		typeAsString = typeAsString[1:]
-		return convertIntToSchema(version, typeAsString, attributes), false, "nil"
+		return convertIntToSchema(typeAsString, attributes), false, "nil"
 	}
-	return convertIntToSchema(version, typeAsString, attributes), true, "'0'"
+	return convertIntToSchema(typeAsString, attributes), true, "'0'"
 }
 
 func handleFloat(floatDefinition string, attributes map[string]string, nullable bool) (string, bool, string) {
@@ -795,15 +770,15 @@ func handleBlob(attributes map[string]string) (string, bool) {
 	return definition, false
 }
 
-func handleString(version int, registry *validatedRegistry, attributes map[string]string, nullable bool) (string, bool, bool, string, error) {
+func handleString(registry *validatedRegistry, attributes map[string]string, nullable bool) (string, bool, bool, string, error) {
 	var definition string
 	enum, hasEnum := attributes["enum"]
 	if hasEnum {
-		return handleSetEnum(version, registry, "enum", enum, nullable)
+		return handleSetEnum(registry, "enum", enum, nullable)
 	}
 	set, haSet := attributes["set"]
 	if haSet {
-		return handleSetEnum(version, registry, "set", set, nullable)
+		return handleSetEnum(registry, "set", set, nullable)
 	}
 	length, hasLength := attributes["length"]
 	if !hasLength {
@@ -815,11 +790,8 @@ func handleString(version int, registry *validatedRegistry, attributes map[strin
 		defaultValue = "''"
 	}
 	if length == "max" {
-		definition = "mediumtext"
-		if version == 8 {
-			encoding := registry.registry.defaultEncoding
-			definition += " CHARACTER SET " + encoding + " COLLATE " + encoding + "_" + registry.registry.defaultCollate
-		}
+		encoding := registry.registry.defaultEncoding
+		definition = "mediumtext CHARACTER SET " + encoding + " COLLATE " + encoding + "_" + registry.registry.defaultCollate
 		addDefaultNullIfNullable = false
 		defaultValue = "nil"
 	} else {
@@ -827,17 +799,13 @@ func handleString(version int, registry *validatedRegistry, attributes map[strin
 		if err != nil || i > 65535 {
 			return "", false, false, "", fmt.Errorf("invalid max string: %s", length)
 		}
-		if version == 5 {
-			definition = fmt.Sprintf("varchar(%s)", strconv.Itoa(i))
-		} else {
-			definition = fmt.Sprintf("varchar(%s) CHARACTER SET %s COLLATE %s_"+registry.registry.defaultCollate, strconv.Itoa(i),
-				registry.registry.defaultEncoding, registry.registry.defaultEncoding)
-		}
+		definition = fmt.Sprintf("varchar(%s) CHARACTER SET %s COLLATE %s_"+registry.registry.defaultCollate, strconv.Itoa(i),
+			registry.registry.defaultEncoding, registry.registry.defaultEncoding)
 	}
 	return definition, !nullable, addDefaultNullIfNullable, defaultValue, nil
 }
 
-func handleSetEnum(version int, registry *validatedRegistry, fieldType string, attribute string, nullable bool) (string, bool, bool, string, error) {
+func handleSetEnum(registry *validatedRegistry, fieldType string, attribute string, nullable bool) (string, bool, bool, string, error) {
 	if registry.enums == nil || registry.enums[attribute] == nil {
 		return "", false, false, "", fmt.Errorf("unregistered enum %s", attribute)
 	}
@@ -850,10 +818,8 @@ func handleSetEnum(version int, registry *validatedRegistry, fieldType string, a
 		definition += fmt.Sprintf("'%s'", value)
 	}
 	definition += ")"
-	if version == 8 {
-		encoding := registry.registry.defaultEncoding
-		definition += " CHARACTER SET " + encoding + " COLLATE " + encoding + "_0900_ai_ci"
-	}
+	encoding := registry.registry.defaultEncoding
+	definition += " CHARACTER SET " + encoding + " COLLATE " + encoding + "_0900_ai_ci"
 	defaultValue := "nil"
 	if !nullable {
 		defaultValue = fmt.Sprintf("'%s'", enum.GetDefault())
@@ -876,74 +842,38 @@ func handleTime(attributes map[string]string, nullable bool) (string, bool, bool
 	return "date", !nullable, true, defaultValue
 }
 
-func handleReferenceOne(version int, schema *tableSchema, attributes map[string]string) string {
-	return convertIntToSchema(version, schema.t.Field(1).Type.String(), attributes)
+func handleReferenceOne(schema *tableSchema, attributes map[string]string) string {
+	return convertIntToSchema(schema.t.Field(1).Type.String(), attributes)
 }
 
-func convertIntToSchema(version int, typeAsString string, attributes map[string]string) string {
+func convertIntToSchema(typeAsString string, attributes map[string]string) string {
 	switch typeAsString {
 	case "uint":
-		if version == 8 {
-			return "int unsigned"
-		}
-		return "int(10) unsigned"
+		return "int unsigned"
 	case "uint8":
-		if version == 8 {
-			return "tinyint unsigned"
-		}
-		return "tinyint(3) unsigned"
+		return "tinyint unsigned"
 	case "uint16":
-		if version == 8 {
-			return "smallint unsigned"
-		}
-		return "smallint(5) unsigned"
+		return "smallint unsigned"
 	case "uint32":
 		if attributes["mediumint"] == "true" {
-			if version == 8 {
-				return "mediumint unsigned"
-			}
-			return "mediumint(8) unsigned"
+			return "mediumint unsigned"
 		}
-		if version == 8 {
-			return "int unsigned"
-		}
-		return "int(10) unsigned"
+		return "int unsigned"
 	case "uint64":
-		if version == 8 {
-			return "bigint unsigned"
-		}
-		return "bigint(20) unsigned"
+		return "bigint unsigned"
 	case "int8":
-		if version == 8 {
-			return "tinyint"
-		}
-		return "tinyint(4)"
+		return "tinyint"
 	case "int16":
-		if version == 8 {
-			return "smallint"
-		}
-		return "smallint(6)"
+		return "smallint"
 	case "int32":
 		if attributes["mediumint"] == "true" {
-			if version == 8 {
-				return "mediumint"
-			}
-			return "mediumint(9)"
+			return "mediumint"
 		}
-		if version == 8 {
-			return "int"
-		}
-		return "int(11)"
+		return "int"
 	case "int64":
-		if version == 8 {
-			return "bigint"
-		}
-		return "bigint(20)"
+		return "bigint"
 	default:
-		if version == 8 {
-			return "int"
-		}
-		return "int(11)"
+		return "int"
 	}
 }
 

@@ -13,8 +13,8 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/redis/go-redis/v9"
 	_ "github.com/go-sql-driver/mysql" // force this mysql driver
+	"github.com/redis/go-redis/v9"
 )
 
 type Registry struct {
@@ -61,6 +61,10 @@ func (r *Registry) Validate() (validated ValidatedRegistry, err error) {
 		err = db.QueryRow("SELECT VERSION()").Scan(&version)
 		checkError(err)
 		v.(*mySQLPoolConfig).version, _ = strconv.Atoi(strings.Split(version, ".")[0])
+		if v.(*mySQLPoolConfig).version < 8 {
+			_ = db.Close()
+			return nil, fmt.Errorf("mysql pool '%s': unsupported MySQL version %s, 8.0+ is required", k, version)
+		}
 
 		var autoincrement uint64
 		var maxConnections int

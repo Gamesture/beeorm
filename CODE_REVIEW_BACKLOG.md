@@ -62,8 +62,12 @@ Zrobione (2026-06-25):
 Pozostało (większe / spoza prostego version-stringa):
 - [x] **`TestSchema8`** — naprawione. Differ OK (zweryfikowane: wszystkie asercje liczby alterów i idempotencji `Len(alters,0)` przechodzą; beeorm generuje poprawny DDL 8.x z jawnym `COLLATE utf8mb4_0900_ai_ci` i `int unsigned`). Failowała tylko **jedna przeterminowana asercja** (`schema_test.go:290`, styl 5.7: `int(10)`, brak COLLATE) — zaktualizowana pod 8.x. NIE był to bug w kodzie.
 - [x] **TestFlush\* — różnica 1h (timezone)** — naprawione: dodany `TestMain` (`main_test.go`) wymuszający `TZ=UTC` dla procesu testowego (BeeORM wymaga UTC; `go test` nie odpala `main()`).
-- [ ] `docker-compose.yml` — opcjonalnie usunąć serwis `mysql_orm` (5.7), zostawić `mysql8_orm` (lub cały compose, skoro jedziemy lokalnie).
-- [ ] `testSchema` — doczyścić martwe gałęzie `if version == 5` (po usunięciu `TestSchema5` nieosiągalne).
+- [x] `docker-compose.yml` — usunięty serwis `mysql_orm` (5.7), `mysql8_orm` na `mysql:8.4`. CI: usunięty serwis 5.7, `mysql:8` → `mysql:8.4`.
+- [x] `testSchema` — usunięte martwe gałęzie `if version == 5`, `TestSchema8` → `TestSchema`, parametr `mySQLVersion` z `prepareTables`, ostatnie porty 3311 (`TestUUIDInvalidSchema`, `TestRedisStreamsStatus`).
+
+Zrobione (2026-10-06) — 5.7 wycięte też z kodu produkcyjnego:
+- [x] `schema.go` — usunięte wszystkie gałęzie `GetVersion() == 5` / `version == 8` (DDL tylko w stylu 8.x). Przy okazji naprawia MySQL 9.x: warunki `== 8` generowały dla wersji 9 DDL w stylu 5.7.
+- [x] `Registry.Validate()` — zwraca błąd dla MySQL < 8 (`unsupported MySQL version ..., 8.0+ is required`). `GetVersion()` zostaje w API.
 
 ## 🟢 LOW — dług techniczny / zależności
 

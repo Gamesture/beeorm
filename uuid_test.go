@@ -44,7 +44,7 @@ func TestUUIDLocalRedisCache(t *testing.T) {
 
 func TestUUIDInvalidSchema(t *testing.T) {
 	registry := &Registry{}
-	registry.RegisterMySQLPool("root:root@tcp(localhost:3311)/test")
+	registry.RegisterMySQLPool("root:root@tcp(localhost:3312)/test")
 	registry.RegisterEntity(&uuidEntityInvalid{})
 	_, err := registry.Validate()
 	assert.EqualError(t, err, "entity beeorm.uuidEntityInvalid with uuid enabled must be unit64")
@@ -61,7 +61,7 @@ func testUUID(t *testing.T, local bool, redis bool) {
 	registry := &Registry{}
 	var entity *uuidEntity
 	var referenceEntity *uuidReferenceEntity
-	engine := prepareTables(t, registry, 8, 6, "", entity, referenceEntity)
+	engine := prepareTables(t, registry, 6, "", entity, referenceEntity)
 	engine.GetMysql().Query("DROP TABLE `uuidReferenceEntity`")
 	engine.GetMysql().Query("DROP TABLE `uuidEntity`")
 	alters := engine.GetAlters()

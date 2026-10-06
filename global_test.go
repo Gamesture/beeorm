@@ -22,8 +22,7 @@ func (h *testLogHandler) clear() {
 	h.Logs = nil
 }
 
-func prepareTables(t *testing.T, registry *Registry, mySQLVersion, redisVersion int, redisNamespace string, entities ...Entity) (engine *engineImplementation) {
-	// MySQL 8.4+ only — old 5.7 path dropped (see CODE_REVIEW_BACKLOG.md)
+func prepareTables(t *testing.T, registry *Registry, redisVersion int, redisNamespace string, entities ...Entity) (engine *engineImplementation) {
 	registry.RegisterMySQLPool("root:root@tcp(localhost:3312)/test?limit_connections=10")
 	registry.RegisterMySQLPool("root:root@tcp(localhost:3312)/test_log", "log")
 	if redisVersion == 6 {

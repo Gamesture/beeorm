@@ -51,7 +51,7 @@ func testLogReceiver(t *testing.T, redisVersion int) {
 	var entity3 *logReceiverEntity3
 	var entity4 *logReceiverEntity4
 	registry := &Registry{}
-	engine := prepareTables(t, registry, 5, redisVersion, "", entity1, entity2, entity3, entity4)
+	engine := prepareTables(t, registry, redisVersion, "", entity1, entity2, entity3, entity4)
 	engine.GetMysql("log").Exec("TRUNCATE TABLE `_log_default_logReceiverEntity1`")
 	engine.GetMysql().Exec("TRUNCATE TABLE `_log_default_logReceiverEntity2`")
 	engine.GetMysql("log").Exec("TRUNCATE TABLE `_log_default_logReceiverEntity3`")
