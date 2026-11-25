@@ -292,3 +292,112 @@ func TestLazyFlushModulo(t *testing.T) {
 		}
 	}
 }
+
+func prepareLazyFlushGroupTest(t *testing.T, queryByQuery bool) (Engine, *BackgroundConsumer, []*lazyReceiverEntity) {
+	var entity *lazyReceiverEntity
+	var ref *lazyReceiverReference
+	registry := &Registry{}
+	registry.RegisterEnum("beeorm.TestEnum", []string{"a", "b", "c"})
+	engine := prepareTables(t, registry, 6, "", entity, ref)
+	engine.GetRedis().FlushDB()
+
+	receiver := NewBackgroundConsumer(engine)
+	receiver.DisableBlockMode()
+	receiver.blockTime = time.Millisecond
+	receiver.SetLazyFlushModulo(1) // all queries in one group
+	receiver.SetLazyFlushQueryByQueryFallback(queryByQuery)
+
+	entities := []*lazyReceiverEntity{{Name: "A"}, {Name: "B"}, {Name: "C"}}
+	engine.Flush(entities[0], entities[1], entities[2])
+	return engine, receiver, entities
+}
+
+func assertLazyFlushGroupAges(t *testing.T, engine Engine, expected ...uint64) {
+	engine.GetLocalCache().Clear()
+	engine.GetRedis().FlushDB()
+	for i, age := range expected {
+		e := &lazyReceiverEntity{}
+		assert.True(t, engine.LoadByID(uint64(i+1), e))
+		assert.Equal(t, age, e.Age, "ID %d", i+1)
+	}
+}
+
+// Query by query fallback: one failing query must not drop other queries from the same group.
+func TestLazyFlushGroupQueryError(t *testing.T) {
+	engine, receiver, entities := prepareLazyFlushGroupTest(t, true)
+	var failedQueries []string
+	receiver.RegisterLazyFlushQueryErrorResolver(func(_ Engine, _ *DB, sql string, queryError *mysql.MySQLError) error {
+		failedQueries = append(failedQueries, sql)
+		return nil // skip failing query, same as spring
+	})
+
+	entities[0].Age = 10
+	engine.FlushLazy(entities[0])
+	entities[1].Name = "C" // duplicate unique key -> Error 1062
+	engine.FlushLazy(entities[1])
+	entities[2].Age = 30
+	engine.FlushLazy(entities[2])
+
+	receiver.Digest(context.Background())
+
+	if assert.Len(t, failedQueries, 1) {
+		assert.Equal(t, "UPDATE `lazyReceiverEntity` SET `Name`='C' WHERE `ID` = 2", failedQueries[0])
+	}
+	assertLazyFlushGroupAges(t, engine, 10, 0, 30)
+	e := &lazyReceiverEntity{}
+	engine.LoadByID(2, e)
+	assert.Equal(t, "B", e.Name)
+
+	// error not accepted by resolvers -> panic, events are not acked and come back in next Digest
+	receiver = NewBackgroundConsumer(engine)
+	receiver.DisableBlockMode()
+	receiver.blockTime = time.Millisecond
+	receiver.SetLazyFlushModulo(1)
+	receiver.SetLazyFlushQueryByQueryFallback(true)
+	entities[0].Age = 40
+	engine.FlushLazy(entities[0])
+	entities[1].Name = "A" // duplicate
+	engine.FlushLazy(entities[1])
+	entities[2].Age = 50
+	engine.FlushLazy(entities[2])
+	assert.PanicsWithError(t, "Error 1062 (23000): Duplicate entry 'A' for key 'lazyreceiverentity.name'", func() {
+		receiver.Digest(context.Background())
+	})
+	failedQueries = nil
+	receiver.RegisterLazyFlushQueryErrorResolver(func(_ Engine, _ *DB, sql string, queryError *mysql.MySQLError) error {
+		failedQueries = append(failedQueries, sql)
+		return nil
+	})
+	receiver.Digest(context.Background())
+	assert.Len(t, failedQueries, 1)
+	assertLazyFlushGroupAges(t, engine, 40, 0, 50)
+	assert.Empty(t, receiver.GetLazyFlushEventsSample(10))
+}
+
+// Default mode (no fallback): failed group is rolled back and resolver gets whole group SQL,
+// so resolver returning nil drops all queries from the group.
+func TestLazyFlushGroupQueryErrorDefault(t *testing.T) {
+	engine, receiver, entities := prepareLazyFlushGroupTest(t, false)
+	var failedQueries []string
+	receiver.RegisterLazyFlushQueryErrorResolver(func(_ Engine, _ *DB, sql string, queryError *mysql.MySQLError) error {
+		failedQueries = append(failedQueries, sql)
+		return nil
+	})
+
+	entities[0].Age = 10
+	engine.FlushLazy(entities[0])
+	entities[1].Name = "C" // duplicate unique key -> Error 1062
+	engine.FlushLazy(entities[1])
+	entities[2].Age = 30
+	engine.FlushLazy(entities[2])
+
+	receiver.Digest(context.Background())
+
+	if assert.Len(t, failedQueries, 1) {
+		assert.Equal(t, "UPDATE `lazyReceiverEntity` SET `Age`=10 WHERE `ID` = 1;"+
+			"UPDATE `lazyReceiverEntity` SET `Name`='C' WHERE `ID` = 2;"+
+			"UPDATE `lazyReceiverEntity` SET `Age`=30 WHERE `ID` = 3;", failedQueries[0])
+	}
+	assertLazyFlushGroupAges(t, engine, 0, 0, 0)
+	assert.Empty(t, receiver.GetLazyFlushEventsSample(10))
+}

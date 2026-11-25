@@ -2,6 +2,7 @@ package beeorm
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"strconv"
@@ -38,6 +39,7 @@ type BackgroundConsumer struct {
 	garbageCollectorSha1         string
 	consumer                     *eventsConsumer
 	lazyFlushModulo              uint64
+	lazyFlushQueryByQuery        bool
 	lazyErrorLock                sync.Mutex
 	lazyFlushQueryErrorResolvers []LazyFlushQueryErrorResolver
 }
@@ -62,6 +64,14 @@ func (r *BackgroundConsumer) SetLazyFlushModulo(modulo uint64) {
 		panic(fmt.Errorf("lazy flush modulo must be greater than 0"))
 	}
 	r.lazyFlushModulo = modulo
+}
+
+// SetLazyFlushQueryByQueryFallback enables fallback for lazy UPDATE/DELETE groups executed in transaction.
+// When group transaction fails, queries are executed one by one in autocommit (stream order):
+// deadlocked query is retried, other errors go to resolvers per single query (nil = skip only this query).
+// Disabled by default: failed group is rolled back and resolver gets whole group SQL.
+func (r *BackgroundConsumer) SetLazyFlushQueryByQueryFallback(enabled bool) {
+	r.lazyFlushQueryByQuery = enabled
 }
 
 func (r *BackgroundConsumer) RegisterLazyFlushQueryErrorResolver(resolver LazyFlushQueryErrorResolver) {
@@ -132,7 +142,7 @@ func (r *BackgroundConsumer) Digest(ctx context.Context) bool {
 		l := len(lazyEvents)
 		if l > 0 {
 			insertEvents := make(map[string][]int)
-			groupQueries := make(map[string]map[int]string)
+			groupQueries := make(map[string]map[int][]string)
 			groupEvents := make(map[string]map[int][]int)
 		MAIN:
 			for i, data := range lazyEventsData {
@@ -155,13 +165,11 @@ func (r *BackgroundConsumer) Digest(ctx context.Context) bool {
 							id, _ = strconv.ParseUint(fmt.Sprintf("%v", ids.([]interface{})[k]), 10, 64)
 						}
 						modulo := int(id % r.lazyFlushModulo)
-						before := groupQueries[code][modulo]
-						before += sql + ";"
 						if groupQueries[code] == nil {
-							groupQueries[code] = make(map[int]string)
+							groupQueries[code] = make(map[int][]string)
 							groupEvents[code] = make(map[int][]int)
 						}
-						groupQueries[code][modulo] = before
+						groupQueries[code][modulo] = append(groupQueries[code][modulo], sql)
 						groupEvents[code][modulo] = append(groupEvents[code][modulo], i)
 					}
 				} else {
@@ -199,9 +207,9 @@ func (r *BackgroundConsumer) Digest(ctx context.Context) bool {
 			if len(groupQueries) > 0 {
 				wg := &sync.WaitGroup{}
 				for code, group := range groupQueries {
-					for i, sql := range group {
+					for i, queries := range group {
 						key := i
-						updateSQL := sql
+						groupSQL := queries
 						dbCode := code
 						wg.Add(1)
 						go func() {
@@ -218,6 +226,7 @@ func (r *BackgroundConsumer) Digest(ctx context.Context) bool {
 								}
 							}()
 							if len(groupEvents[dbCode][key]) == 1 {
+								updateSQL := groupSQL[0] + ";"
 								_, err := r.engine.GetMysql(dbCode).exec(updateSQL)
 								if err != nil {
 									valid := false
@@ -232,7 +241,17 @@ func (r *BackgroundConsumer) Digest(ctx context.Context) bool {
 										panic(err)
 									}
 								}
+							} else if r.lazyFlushQueryByQuery {
+								db := r.engine.Clone().GetMysql(dbCode)
+								err := r.execGroupInTransaction(db, groupSQL)
+								if err != nil {
+									start := time.Now()
+									log.Printf("lazy flush: group transaction with %d queries failed (%v), executing query by query\n", len(groupSQL), err)
+									r.execQueryByQuery(db, groupSQL)
+									log.Printf("lazy flush: %d queries executed query by query in %s\n", len(groupSQL), time.Since(start))
+								}
 							} else {
+								updateSQL := strings.Join(groupSQL, ";") + ";"
 								deadlock := false
 								func() {
 									defer func() {
@@ -296,6 +315,58 @@ func (r *BackgroundConsumer) Digest(ctx context.Context) bool {
 		}
 		r.handleLog(logEventsData)
 	})
+}
+
+const lazyFlushDeadlockRetries = 3
+
+// execGroupInTransaction executes all queries in one transaction and one round trip.
+// Query error is returned after rollback, BEGIN/COMMIT errors panic.
+func (r *BackgroundConsumer) execGroupInTransaction(db *DB, queries []string) error {
+	db.Begin()
+	defer db.Rollback()
+	_, err := db.exec(strings.Join(queries, ";") + ";")
+	if err != nil {
+		return err
+	}
+	db.Commit()
+	return nil
+}
+
+// execQueryByQuery executes queries one by one in autocommit, in stream order, so one failing
+// query does not drop the others. Deadlocked query is retried, other errors go to resolvers
+// (nil = query is skipped). Panics when no resolver accepts the error - events are not acked then.
+func (r *BackgroundConsumer) execQueryByQuery(db *DB, queries []string) {
+	for _, sql := range queries {
+		for attempt := 1; ; attempt++ {
+			_, err := db.exec(sql)
+			if err == nil {
+				break
+			}
+			if isDeadlockError(err) && attempt <= lazyFlushDeadlockRetries {
+				time.Sleep(time.Millisecond * 30 * time.Duration(attempt))
+				continue
+			}
+			r.resolveQueryError(db, sql, err)
+			break
+		}
+	}
+}
+
+func (r *BackgroundConsumer) resolveQueryError(db *DB, sql string, err error) {
+	var mysqlError *mysql.MySQLError
+	if errors.As(err, &mysqlError) {
+		for _, resolver := range r.lazyFlushQueryErrorResolvers {
+			if resolver(r.engine, db, sql, mysqlError) == nil {
+				return
+			}
+		}
+	}
+	panic(err)
+}
+
+func isDeadlockError(err error) bool {
+	var mysqlError *mysql.MySQLError
+	return errors.As(err, &mysqlError) && mysqlError.Number == 1213
 }
 
 func (r *BackgroundConsumer) handleLog(values map[string][]*LogQueueValue) {
